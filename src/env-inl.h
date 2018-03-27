@@ -492,6 +492,48 @@ Environment::fs_stats_field_array() {
   return &fs_stats_field_array_;
 }
 
+template <typename NativeT, typename V8T>
+void FillStatsArray(AliasedBuffer<NativeT, V8T>* fields_ptr,
+                    const uv_stat_t* s, int offset = 0) {
+  AliasedBuffer<NativeT, V8T>& fields = *fields_ptr;
+  fields[offset + 0] = s->st_dev;
+  fields[offset + 1] = s->st_mode;
+  fields[offset + 2] = s->st_nlink;
+  fields[offset + 3] = s->st_uid;
+  fields[offset + 4] = s->st_gid;
+  fields[offset + 5] = s->st_rdev;
+#if defined(__POSIX__)
+  fields[offset + 6] = s->st_blksize;
+#else
+  fields[offset + 6] = -1;
+#endif
+  fields[offset + 7] = s->st_ino;
+  fields[offset + 8] = s->st_size;
+#if defined(__POSIX__)
+  fields[offset + 9] = s->st_blocks;
+#else
+  fields[offset + 9] = -1;
+#endif
+// Dates.
+// NO-LINT because the fields are 'long' and we just want to cast to `unsigned`
+#define X(idx, name)                                                    \
+  /* NOLINTNEXTLINE(runtime/int) */                                     \
+  fields[offset + idx] = ((unsigned long)(s->st_##name.tv_sec) * 1e3) + \
+  /* NOLINTNEXTLINE(runtime/int) */                                     \
+                ((unsigned long)(s->st_##name.tv_nsec) / 1e6);          \
+
+  X(10, atim)
+  X(11, mtim)
+  X(12, ctim)
+  X(13, birthtim)
+#undef X
+}
+
+inline void Environment::FillGlobalStatsArray(const uv_stat_t* s,
+                                              int offset) {
+  node::FillStatsArray(&fs_stats_field_array_, s, offset);
+}
+
 inline std::vector<std::unique_ptr<fs::FileHandleReadWrap>>&
 Environment::file_handle_read_wrap_freelist() {
   return file_handle_read_wrap_freelist_;
