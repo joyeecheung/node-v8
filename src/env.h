@@ -643,6 +643,8 @@ class Environment {
   inline void set_http2_state(std::unique_ptr<http2::http2_state> state);
 
   inline AliasedBuffer<double, v8::Float64Array>* fs_stats_field_array();
+  inline AliasedBuffer<uint64_t, v8::BigUint64Array>*
+      fs_stats_field_bigint_array();
 
   // stat fields contains twice the number of entries because `fs.StatWatcher`
   // needs room to store data for *two* `fs.Stats` instances.
@@ -827,6 +829,7 @@ class Environment {
   std::unique_ptr<http2::http2_state> http2_state_;
 
   AliasedBuffer<double, v8::Float64Array> fs_stats_field_array_;
+  AliasedBuffer<uint64_t, v8::BigUint64Array> fs_stats_field_bigint_array_;
 
   std::vector<std::unique_ptr<fs::FileHandleReadWrap>>
       file_handle_read_wrap_freelist_;

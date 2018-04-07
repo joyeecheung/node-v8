@@ -79,9 +79,10 @@ static void Delete(uv_handle_t* handle) {
 }
 
 
-StatWatcher::StatWatcher(Environment* env, Local<Object> wrap)
+StatWatcher::StatWatcher(Environment* env, Local<Object> wrap, bool use_bigint)
     : AsyncWrap(env, wrap, AsyncWrap::PROVIDER_STATWATCHER),
-      watcher_(new uv_fs_poll_t) {
+      watcher_(new uv_fs_poll_t),
+      use_bigint_(use_bigint) {
   MakeWeak<StatWatcher>(this);
   Wrap(wrap, this);
   uv_fs_poll_init(env->event_loop(), watcher_);
@@ -107,8 +108,10 @@ void StatWatcher::Callback(uv_fs_poll_t* handle,
   HandleScope handle_scope(env->isolate());
   Context::Scope context_scope(env->context());
 
-  Local<Value> arr = node::FillGlobalStatsArray(env, curr);
-  node::FillGlobalStatsArray(env, prev, env->kFsStatsFieldsLength);
+  Local<Value> arr = node::FillGlobalStatsArray(env, curr,
+                                                wrap->use_bigint_);
+  node::FillGlobalStatsArray(env, prev, wrap->use_bigint_,
+                             env->kFsStatsFieldsLength);
 
   Local<Value> argv[2] {
     Integer::New(env->isolate(), status),
@@ -121,7 +124,7 @@ void StatWatcher::Callback(uv_fs_poll_t* handle,
 void StatWatcher::New(const FunctionCallbackInfo<Value>& args) {
   CHECK(args.IsConstructCall());
   Environment* env = Environment::GetCurrent(args);
-  new StatWatcher(env, args.This());
+  new StatWatcher(env, args.This(), args[0]->IsTrue());
 }
 
 bool StatWatcher::IsActive() {

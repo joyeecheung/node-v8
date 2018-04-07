@@ -397,7 +397,7 @@ void FSReqWrap::Reject(Local<Value> reject) {
 }
 
 void FSReqWrap::ResolveStat(const uv_stat_t* stat) {
-  Resolve(node::FillGlobalStatsArray(env(), stat));
+  Resolve(node::FillGlobalStatsArray(env(), stat, use_bigint()));
 }
 
 void FSReqWrap::Resolve(Local<Value> value) {
@@ -415,7 +415,7 @@ void FSReqWrap::SetReturnValue(const FunctionCallbackInfo<Value>& args) {
 void NewFSReqWrap(const FunctionCallbackInfo<Value>& args) {
   CHECK(args.IsConstructCall());
   Environment* env = Environment::GetCurrent(args.GetIsolate());
-  new FSReqWrap(env, args.This());
+  new FSReqWrap(env, args.This(), args[0]->IsTrue());
 }
 
 FSReqAfterScope::FSReqAfterScope(FSReqBase* wrap, uv_fs_t* req)
@@ -653,11 +653,12 @@ inline int SyncCall(Environment* env, Local<Value> ctx, FSReqWrapSync* req_wrap,
   return err;
 }
 
-inline FSReqBase* GetReqWrap(Environment* env, Local<Value> value) {
+inline FSReqBase* GetReqWrap(Environment* env, Local<Value> value,
+                             bool use_bigint = false) {
   if (value->IsObject()) {
     return Unwrap<FSReqBase>(value.As<Object>());
   } else if (value->StrictEquals(env->fs_use_promises_symbol())) {
-    return new FSReqPromise<double, v8::Float64Array>(env);
+    return new FSReqPromise<double, v8::Float64Array>(env, use_bigint);
   }
   return nullptr;
 }
@@ -804,20 +805,21 @@ static void Stat(const FunctionCallbackInfo<Value>& args) {
   BufferValue path(env->isolate(), args[0]);
   CHECK_NE(*path, nullptr);
 
-  FSReqBase* req_wrap_async = GetReqWrap(env, args[1]);
-  if (req_wrap_async != nullptr) {  // stat(path, req)
+  bool use_bigint = args[1]->IsTrue();
+  FSReqBase* req_wrap_async = GetReqWrap(env, args[2], use_bigint);
+  if (req_wrap_async != nullptr) {  // stat(path, use_bigint, req)
     AsyncCall(env, req_wrap_async, args, "stat", UTF8, AfterStat,
               uv_fs_stat, *path);
-  } else {  // stat(path, undefined, ctx)
-    CHECK_EQ(argc, 3);
+  } else {  // stat(path, use_bigint, undefined, ctx)
+    CHECK_EQ(argc, 4);
     FSReqWrapSync req_wrap_sync;
-    int err = SyncCall(env, args[2], &req_wrap_sync, "stat", uv_fs_stat, *path);
+    int err = SyncCall(env, args[3], &req_wrap_sync, "stat", uv_fs_stat, *path);
     if (err != 0) {
       return;  // error info is in ctx
     }
 
     Local<Value> arr = node::FillGlobalStatsArray(env,
-        static_cast<const uv_stat_t*>(req_wrap_sync.req.ptr));
+        static_cast<const uv_stat_t*>(req_wrap_sync.req.ptr), use_bigint);
     args.GetReturnValue().Set(arr);
   }
 }
@@ -826,26 +828,27 @@ static void LStat(const FunctionCallbackInfo<Value>& args) {
   Environment* env = Environment::GetCurrent(args);
 
   const int argc = args.Length();
-  CHECK_GE(argc, 2);
+  CHECK_GE(argc, 3);
 
   BufferValue path(env->isolate(), args[0]);
   CHECK_NE(*path, nullptr);
 
-  FSReqBase* req_wrap_async = GetReqWrap(env, args[1]);
-  if (req_wrap_async != nullptr) {  // lstat(path, req)
+  bool use_bigint = args[1]->IsTrue();
+  FSReqBase* req_wrap_async = GetReqWrap(env, args[2], use_bigint);
+  if (req_wrap_async != nullptr) {  // lstat(path, use_bigint, req)
     AsyncCall(env, req_wrap_async, args, "lstat", UTF8, AfterStat,
               uv_fs_lstat, *path);
-  } else {  // lstat(path, undefined, ctx)
-    CHECK_EQ(argc, 3);
+  } else {  // lstat(path, use_bigint, undefined, ctx)
+    CHECK_EQ(argc, 4);
     FSReqWrapSync req_wrap_sync;
-    int err = SyncCall(env, args[2], &req_wrap_sync, "lstat", uv_fs_lstat,
+    int err = SyncCall(env, args[3], &req_wrap_sync, "lstat", uv_fs_lstat,
                        *path);
     if (err != 0) {
       return;  // error info is in ctx
     }
 
     Local<Value> arr = node::FillGlobalStatsArray(env,
-        static_cast<const uv_stat_t*>(req_wrap_sync.req.ptr));
+        static_cast<const uv_stat_t*>(req_wrap_sync.req.ptr), use_bigint);
     args.GetReturnValue().Set(arr);
   }
 }
@@ -859,20 +862,21 @@ static void FStat(const FunctionCallbackInfo<Value>& args) {
   CHECK(args[0]->IsInt32());
   int fd = args[0].As<Int32>()->Value();
 
-  FSReqBase* req_wrap_async = GetReqWrap(env, args[1]);
-  if (req_wrap_async != nullptr) {  // fstat(fd, req)
+  bool use_bigint = args[1]->IsTrue();
+  FSReqBase* req_wrap_async = GetReqWrap(env, args[2], use_bigint);
+  if (req_wrap_async != nullptr) {  // fstat(fd, use_bigint, req)
     AsyncCall(env, req_wrap_async, args, "fstat", UTF8, AfterStat,
               uv_fs_fstat, fd);
-  } else {  // fstat(fd, undefined, ctx)
-    CHECK_EQ(argc, 3);
+  } else {  // fstat(fd, use_bigint, undefined, ctx)
+    CHECK_EQ(argc, 4);
     FSReqWrapSync req_wrap_sync;
-    int err = SyncCall(env, args[2], &req_wrap_sync, "fstat", uv_fs_fstat, fd);
+    int err = SyncCall(env, args[3], &req_wrap_sync, "fstat", uv_fs_fstat, fd);
     if (err != 0) {
       return;  // error info is in ctx
     }
 
     Local<Value> arr = node::FillGlobalStatsArray(env,
-        static_cast<const uv_stat_t*>(req_wrap_sync.req.ptr));
+        static_cast<const uv_stat_t*>(req_wrap_sync.req.ptr), use_bigint);
     args.GetReturnValue().Set(arr);
   }
 }
@@ -1831,6 +1835,10 @@ void Initialize(Local<Object> target,
   target->Set(context,
               FIXED_ONE_BYTE_STRING(env->isolate(), "statValues"),
               env->fs_stats_field_array()->GetJSArray()).FromJust();
+
+  target->Set(context,
+              FIXED_ONE_BYTE_STRING(env->isolate(), "bigintStatValues"),
+              env->fs_stats_field_bigint_array()->GetJSArray()).FromJust();
 
   StatWatcher::Initialize(env, target);
 
